@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive projection of a rotating four-dimensional tesseract.">
+  <title>4D Tesseract</title>
+  <style>
+    :root { color-scheme: dark; --ink:#f4f7ff; --muted:#aeb9d5; --bg:#060914; --panel:#0e1428; --line:#5a77ff; --hot:#ff8bd2; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; background:radial-gradient(circle at 50% 15%,#1b2860 0,#0b1024 34%,var(--bg) 75%); color:var(--ink); font:16px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(880px,100%); }
+    header { display:flex; gap:20px; align-items:end; justify-content:space-between; margin-bottom:16px; }
+    h1 { margin:0; font-size:clamp(1.7rem,4vw,3rem); letter-spacing:-.04em; }
+    p { margin:4px 0 0; color:var(--muted); }
+    .badge { color:#dce4ff; font-size:.85rem; white-space:nowrap; }
+    .stage { position:relative; overflow:hidden; min-height:420px; background:linear-gradient(145deg,rgba(27,40,96,.4),rgba(6,9,20,.3)); border:1px solid rgba(190,205,255,.2); border-radius:22px; box-shadow:0 24px 80px rgba(0,0,0,.38); }
+    canvas { width:100%; height:clamp(420px,60vw,560px); display:block; touch-action:none; }
+    .hint { position:absolute; inset:auto 18px 16px; color:var(--muted); font-size:.85rem; pointer-events:none; }
+    .controls { margin-top:16px; padding:16px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; background:rgba(14,20,40,.82); border:1px solid rgba(190,205,255,.16); border-radius:16px; }
+    button { appearance:none; border:1px solid rgba(190,205,255,.25); border-radius:10px; padding:10px 12px; background:#18214a; color:var(--ink); font:inherit; cursor:pointer; }
+    button:hover { background:#24316c; } button:focus-visible { outline:3px solid #91a8ff; outline-offset:2px; }
+    .readout { grid-column:span 3; color:var(--muted); font-size:.9rem; text-align:center; }
+    @media (max-width:520px) { body{padding:14px} header{align-items:start;flex-direction:column;gap:4px}.badge{white-space:normal}.stage{min-height:360px}canvas{height:360px}.controls{grid-template-columns:1fr 1fr}.readout{grid-column:span 2} }
+  </style>
+</head>
+<body>
+  <main>
+    <header><div><h1>A rotating 4D cube</h1><p>A tesseract projected from four dimensions into your screen.</p></div><div class="badge">32 edges · 16 vertices</div></header>
+    <section class="stage" aria-label="Interactive tesseract visualization">
+      <canvas id="scene" aria-label="A colorful rotating tesseract. Drag to orbit the view."></canvas>
+      <span class="hint">Drag to orbit · keys: space, R</span>
+    </section>
+    <section class="controls" aria-label="Animation controls">
+      <button id="toggle" type="button">Pause rotation</button>
+      <button id="faster" type="button">Faster</button>
+      <button id="reset" type="button">Reset view</button>
+      <div id="readout" class="readout" aria-live="polite">Spinning through XW and YW planes</div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById('scene'), ctx = canvas.getContext('2d');
+      const toggle = document.getElementById('toggle'), faster = document.getElementById('faster'), reset = document.getElementById('reset'), readout = document.getElementById('readout');
+      const vertices = Array.from({length:16},(_,i)=>[-1,1].map((_,d)=>i&(1<<d)?1:-1).concat(i&4?1:-1,i&8?1:-1));
+      const edges = []; for(let i=0;i<16;i++) for(let b=0;b<4;b++){const j=i^(1<<b);if(i<j)edges.push([i,j]);}
+      let angle=0, pitch=.28, yaw=-.55, running=true, speed=1, drag=null, last=performance.now();
+      function resize(){ const r=canvas.getBoundingClientRect(), d=devicePixelRatio||1; canvas.width=r.width*d; canvas.height=r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
+      function rot(a,i,j,t){const c=Math.cos(t),s=Math.sin(t),x=a[i],y=a[j];a[i]=x*c-y*s;a[j]=x*s+y*c;return a;}
+      function project(v){ let a=v.slice(); rot(a,0,3,angle);rot(a,1,3,angle*.73); const w=3.25/(3.9-a[3]); let x=a[0]*w,z=a[2]*w,y=a[1]*w; const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch); const rx=x*cy+z*sy,rz=-x*sy+z*cy,ry=y*cp-rz*sp; return {x:rx,y:ry,z:rz,w:a[3]}; }
+      function draw(){ const r=canvas.getBoundingClientRect(), W=r.width,H=r.height, scale=Math.min(W,H)*.245; ctx.clearRect(0,0,W,H); const pts=vertices.map(project); edges.forEach(([a,b])=>{const p=pts[a],q=pts[b], glow=(p.w+q.w+2)/4; ctx.beginPath();ctx.moveTo(W/2+p.x*scale,H/2+p.y*scale);ctx.lineTo(W/2+q.x*scale,H/2+q.y*scale);ctx.strokeStyle=`hsla(${225+glow*100},100%,${62+glow*16}%,${.25+glow*.7})`;ctx.lineWidth=1.3+glow*1.8;ctx.stroke();}); pts.sort((a,b)=>a.z-b.z).forEach(p=>{const glow=(p.w+1)/2;ctx.beginPath();ctx.arc(W/2+p.x*scale,H/2+p.y*scale,3+glow*3,0,Math.PI*2);ctx.fillStyle=`hsl(${225+glow*100},100%,${67+glow*15}%)`;ctx.fill();}); }
+      function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(running)angle+=dt*speed*.8;draw();requestAnimationFrame(frame);} requestAnimationFrame(frame); new ResizeObserver(resize).observe(canvas); resize();
+      toggle.onclick=()=>{running=!running;toggle.textContent=running?'Pause rotation':'Resume rotation';readout.textContent=running?'Spinning through XW and YW planes':'Rotation paused';};
+      faster.onclick=()=>{speed=speed>=3?1:speed+1;faster.textContent=`Speed ${speed}×`;readout.textContent=`Rotation speed: ${speed}×`;};
+      reset.onclick=()=>{angle=0;pitch=.28;yaw=-.55;speed=1;faster.textContent='Faster';running=true;toggle.textContent='Pause rotation';readout.textContent='Spinning through XW and YW planes';};
+      canvas.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+      canvas.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.012;pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-drag.y)*.012));drag={x:e.clientX,y:e.clientY};});
+      canvas.addEventListener('pointerup',()=>drag=null); window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();toggle.click();}if(e.key.toLowerCase()==='r')reset.click();});
+    })();
+  </script>
+</body>
+</html>
